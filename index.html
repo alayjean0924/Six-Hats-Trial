@@ -244,23 +244,29 @@
   /* ─── STICKY COLUMNS (FREEZE PANES) ─── */
   .sticky-col-1 { position: sticky; left: 0; z-index: 2; width: 60px; min-width: 60px; max-width: 60px; box-sizing: border-box; }
   .sticky-col-2 { position: sticky; left: 60px; z-index: 2; width: 80px; min-width: 80px; max-width: 80px; box-sizing: border-box; }
+  .sticky-col-3 { position: sticky; left: 140px; z-index: 2; width: 100px; min-width: 100px; max-width: 100px; box-sizing: border-box; }
   .sticky-col-grp { position: sticky; left: 0; z-index: 2; width: 120px; min-width: 120px; max-width: 120px; box-sizing: border-box; }
+  .sticky-col-members { position: sticky; left: 120px; z-index: 2; width: 180px; min-width: 180px; max-width: 180px; box-sizing: border-box; }
   .sticky-shadow::after {
     content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 6px; transform: translateX(100%);
     box-shadow: inset 6px 0 6px -6px rgba(0,0,0,0.5); pointer-events: none;
   }
 
   /* Sticky Backgrounds for Display Table */
-  .display-table th.sticky-col-1, .display-table th.sticky-col-2 { background: var(--surface); z-index: 3; }
-  .display-table td.sticky-col-1, .display-table td.sticky-col-2 { background: var(--bg); }
-  .panel .display-table td.sticky-col-1, .panel .display-table td.sticky-col-2 { background: var(--surface); }
-  .display-table tr:hover td.sticky-col-1, .display-table tr:hover td.sticky-col-2 { background: rgba(255,255,255,0.05); }
+  .display-table th.sticky-col-1, .display-table th.sticky-col-2, .display-table th.sticky-col-3, .display-table th.sticky-col-grp, .display-table th.sticky-col-members { background: var(--surface); z-index: 3; }
+  .display-table td.sticky-col-1, .display-table td.sticky-col-2, .display-table td.sticky-col-3, .display-table td.sticky-col-grp, .display-table td.sticky-col-members { background: var(--bg); }
+  .panel .display-table td.sticky-col-1, .panel .display-table td.sticky-col-2, .panel .display-table td.sticky-col-3, .panel .display-table td.sticky-col-grp, .panel .display-table td.sticky-col-members { background: var(--surface); }
+  .display-table tr:hover td.sticky-col-1, .display-table tr:hover td.sticky-col-2, .display-table tr:hover td.sticky-col-3, .display-table tr:hover td.sticky-col-grp, .display-table tr:hover td.sticky-col-members { background: rgba(255,255,255,0.05); }
 
-  /* Sticky Backgrounds for Records Table */
-  #recordsTable th.sticky-col-1, #recordsTable th.sticky-col-2, #recordsTable th.sticky-col-grp { background: var(--surface2); z-index: 3; }
-  #recordsTable td.sticky-col-1, #recordsTable td.sticky-col-2, #recordsTable td.sticky-col-grp { background: var(--surface); }
-  #recordsTable tr:hover td.sticky-col-1, #recordsTable tr:hover td.sticky-col-2, #recordsTable tr:hover td.sticky-col-grp { background: rgba(255,255,255,0.05); }
-
+  /* Sticky Backgrounds for Records Table & Attendance Table */
+  #recordsTable th.sticky-col-1, #recordsTable th.sticky-col-2, #recordsTable th.sticky-col-3, #recordsTable th.sticky-col-grp, #recordsTable th.sticky-col-members,
+  #attendanceTable th.sticky-col-1, #attendanceTable th.sticky-col-2 { background: var(--surface2); z-index: 3; }
+  
+  #recordsTable td.sticky-col-1, #recordsTable td.sticky-col-2, #recordsTable td.sticky-col-3, #recordsTable td.sticky-col-grp, #recordsTable td.sticky-col-members,
+  #attendanceTable td.sticky-col-1, #attendanceTable td.sticky-col-2 { background: var(--surface); }
+  
+  #recordsTable tr:hover td.sticky-col-1, #recordsTable tr:hover td.sticky-col-2, #recordsTable tr:hover td.sticky-col-3, #recordsTable tr:hover td.sticky-col-grp, #recordsTable tr:hover td.sticky-col-members,
+  #attendanceTable tr:hover td.sticky-col-1, #attendanceTable tr:hover td.sticky-col-2 { background: rgba(255,255,255,0.05); }
 
   /* ─── CHECKBOX ─── */
   .check-cell { text-align: center; }
@@ -596,7 +602,7 @@
       </div>
       <div class="panel" style="padding:0; overflow:hidden;">
         <div class="table-wrap" style="border:none; border-radius:0;">
-          <table>
+          <table id="attendanceTable">
             <thead><tr id="attendanceHead"></tr></thead>
             <tbody id="attendanceBody"></tbody>
           </table>
@@ -932,6 +938,23 @@ function load() {
 }
 load();
 
+// ══════════════════════════════════════════════════════════
+//  DATA PATCH: 修正 47號 Manu 的 Salmon Chaos 分數
+// ══════════════════════════════════════════════════════════
+(function patchManuScore() {
+  if (!state.students || !state.assignments || !state.scores) return;
+  const manu = state.students.find(s => s.seatNo == '47' || (s.name && s.name.toLowerCase().includes('manu')));
+  const salmon = state.assignments.find(a => a.name && a.name.toLowerCase().includes('salmon chaos'));
+  if (manu && salmon) {
+    if (!state.scores[salmon.id]) state.scores[salmon.id] = {};
+    if (state.scores[salmon.id][manu.id] !== 90) {
+      state.scores[salmon.id][manu.id] = 90;
+      save();
+    }
+  }
+})();
+
+
 function uid() { return '_' + Math.random().toString(36).slice(2, 10); }
 
 // 強制「座號順序」的核心排序函式
@@ -1201,7 +1224,7 @@ function renderRecords() {
   }
   
   if (recordView === 'individual') {
-    thead.innerHTML = '<th class="sticky-col-1">座號</th><th class="sticky-col-2 sticky-shadow">姓名</th><th>組別</th>' + assigns.map(a => `<th style="text-align:center;white-space:nowrap;">${a.name}<br><span style="font-size:10px;color:var(--text3);font-weight:400;">${a.mode==='group'?'小組':'個人'}</span></th>`).join('') + '<th>繳交率</th>';
+    thead.innerHTML = '<th class="sticky-col-1">座號</th><th class="sticky-col-2">姓名</th><th class="sticky-col-3 sticky-shadow">組別</th>' + assigns.map(a => `<th style="text-align:center;white-space:nowrap;">${a.name}<br><span style="font-size:10px;color:var(--text3);font-weight:400;">${a.mode==='group'?'小組':'個人'}</span></th>`).join('') + '<th>繳交率</th>';
     // 確保留在個人模式時，依舊為座號排序
     tbody.innerHTML = getSortedStudents().map(s => {
       const grp = state.groups.find(g => g.id === s.groupId);
@@ -1217,15 +1240,15 @@ function renderRecords() {
       const barColor = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
       return `<tr>
         <td class="sticky-col-1"><span class="badge badge-gray">${s.seatNo}</span></td>
-        <td class="sticky-col-2 sticky-shadow">${s.name}</td>
-        <td>${grp ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${grp.color};"></span><span style="font-size:12px;">${grp.name}</span></span>` : '<span class="text-xs">未分組</span>'}</td>
+        <td class="sticky-col-2">${s.name}</td>
+        <td class="sticky-col-3 sticky-shadow">${grp ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${grp.color};"></span><span style="font-size:12px;">${grp.name}</span></span>` : '<span class="text-xs">未分組</span>'}</td>
         ${cells}
         <td><div style="display:flex;align-items:center;gap:6px;"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%;background:${barColor};"></div></div><span style="font-size:11px;color:var(--text2);">${pct}%</span></div></td>
       </tr>`;
     }).join('');
   } else {
     if (!state.groups.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px;">尚未建立組別</td></tr>'; return; }
-    thead.innerHTML = '<th class="sticky-col-grp sticky-shadow">組別</th><th>成員</th>' + assigns.map(a => `<th style="text-align:center;">${a.name}</th>`).join('') + '<th>繳交率</th>';
+    thead.innerHTML = '<th class="sticky-col-grp">組別</th><th class="sticky-col-members sticky-shadow">成員</th>' + assigns.map(a => `<th style="text-align:center;">${a.name}</th>`).join('') + '<th>繳交率</th>';
     tbody.innerHTML = state.groups.map(g => {
       // 在小組名單內部的成員也依照座號排序
       const members = getSortedStudents().filter(s => s.groupId === g.id);
@@ -1238,8 +1261,8 @@ function renderRecords() {
       const pct = assigns.length ? Math.round(submitted / assigns.length * 100) : 0;
       const barColor = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
       return `<tr>
-        <td class="sticky-col-grp sticky-shadow"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${g.color}"></span><strong>${g.name}</strong></span></td>
-        <td><div style="display:flex;flex-wrap:wrap;gap:4px;">${members.map(s=>`<span class="badge badge-gray">${s.seatNo}</span>`).join('')}</div></td>
+        <td class="sticky-col-grp"><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${g.color}"></span><strong>${g.name}</strong></span></td>
+        <td class="sticky-col-members sticky-shadow"><div style="display:flex;flex-wrap:wrap;gap:4px;">${members.map(s=>`<span class="badge badge-gray">${s.seatNo}</span>`).join('')}</div></td>
         ${cells}
         <td><div style="display:flex;align-items:center;gap:6px;"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%;background:${barColor};"></div></div><span style="font-size:11px;color:var(--text2);">${pct}%</span></div></td>
       </tr>`;
@@ -1315,7 +1338,7 @@ function renderAttendance() {
     thead.innerHTML = '<th>-</th>'; tbody.innerHTML = '<tr><td style="color:var(--text3);text-align:center;padding:24px;">尚無紀錄</td></tr>'; return;
   }
   
-  thead.innerHTML = '<th>座號</th><th>姓名</th>' + state.attendanceDates.map(d => `<th style="text-align:center;white-space:nowrap;">${d.date} ${d.name}<br><button class="btn btn-danger btn-xs" style="margin-top:4px;" onclick="removeAttendanceDate('${d.id}')">刪除</button></th>`).join('') + '<th>出席率</th>';
+  thead.innerHTML = '<th class="sticky-col-1">座號</th><th class="sticky-col-2 sticky-shadow">姓名</th>' + state.attendanceDates.map(d => `<th style="text-align:center;white-space:nowrap;">${d.date} ${d.name}<br><button class="btn btn-danger btn-xs" style="margin-top:4px;" onclick="removeAttendanceDate('${d.id}')">刪除</button></th>`).join('') + '<th>出席率</th>';
   
   // 使用強制的座號排序
   tbody.innerHTML = getSortedStudents().map(s => {
@@ -1326,8 +1349,8 @@ function renderAttendance() {
     const rate = getAttendanceRate(s.id);
     const barColor = rate >= 80 ? 'var(--success)' : rate >= 50 ? 'var(--warning)' : 'var(--danger)';
     return `<tr>
-      <td><span class="badge badge-gray">${s.seatNo}</span></td>
-      <td>${s.name}</td>
+      <td class="sticky-col-1"><span class="badge badge-gray">${s.seatNo}</span></td>
+      <td class="sticky-col-2 sticky-shadow">${s.name}</td>
       ${cells}
       <td><span style="font-weight:700;color:${barColor}">${rate}%</span></td>
     </tr>`;
@@ -1592,7 +1615,7 @@ function renderDisplay() {
     c.innerHTML = `<div class="display-table-wrap">
       <table class="display-table">
         <thead><tr>
-          <th class="sticky-col-1">座號</th><th class="sticky-col-2 sticky-shadow">姓名</th><th>組別</th>
+          <th class="sticky-col-1">座號</th><th class="sticky-col-2">姓名</th><th class="sticky-col-3 sticky-shadow">組別</th>
           ${state.assignments.map(a => `<th style="text-align:center;">${a.name}</th>`).join('')}
           ${hasAttendance ? '<th>出席率</th>' : ''}
           <th>繳交率</th><th>平均分數</th>
@@ -1623,8 +1646,8 @@ function renderDisplay() {
             
             return `<tr>
               <td class="sticky-col-1"><strong>${s.seatNo}</strong></td>
-              <td class="sticky-col-2 sticky-shadow">${s.name}</td>
-              <td>${grp ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${grp.color}"></span>${grp.name}</span>` : '<span style="color:var(--text3);font-size:12px;">未分組</span>'}</td>
+              <td class="sticky-col-2">${s.name}</td>
+              <td class="sticky-col-3 sticky-shadow">${grp ? `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${grp.color}"></span>${grp.name}</span>` : '<span style="color:var(--text3);font-size:12px;">未分組</span>'}</td>
               ${cells}
               ${attCell}
               <td><span style="font-weight:700;color:${pctColor}">${pct}%</span></td>
