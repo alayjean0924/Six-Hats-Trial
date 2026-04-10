@@ -676,6 +676,23 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="syncModal">
+  <div class="modal">
+    <div class="modal-title">📤 產生回傳同步連結</div>
+    <div class="form-group">
+      <div class="form-label">長網址 (系統預設)</div>
+      <textarea id="syncLongUrl" rows="4" readonly style="width:100%; font-size:11px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); resize:none;"></textarea>
+    </div>
+    <div class="form-group" style="margin-top:12px;">
+      <button class="btn btn-primary" id="btnShorten" onclick="createShortUrl()" style="width:100%; justify-content:center; padding:10px;">✨ 產生 is.gd 短網址</button>
+      <input type="text" id="syncShortUrl" readonly placeholder="短網址將顯示於此..." style="margin-top:10px; display:none; padding:10px; font-size:14px; text-align:center; font-weight:bold; color:var(--accent2); background:var(--surface); border:1px solid var(--border);">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-secondary" onclick="closeModal('syncModal')">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════
 //  URL MODE CHECK
@@ -733,27 +750,40 @@ function load() {
       if (hashData && hashData[1]) {
         const urlData = decompressData(hashData[1]);
         
-        // 防呆設定：確保所有屬性存在
-        if(!urlData.scores) urlData.scores = {};
-        if(!urlData.adjustments) urlData.adjustments = {};
-        if(!urlData.records) urlData.records = {};
-        if(!urlData.attendanceDates) urlData.attendanceDates = [];
-        if(!urlData.attendanceRecords) urlData.attendanceRecords = {};
-        if(!urlData.assignments) urlData.assignments = [];
-
         if (appMode === 'sync') {
           const localData = localStorage.getItem('sixhats_v4');
-          if (localData) state = JSON.parse(localData);
+          if (localData) {
+            try { state = JSON.parse(localData); } catch(e) {}
+          }
           
+          // 防呆設定：確保所有屬性存在
           if(!state.scores) state.scores = {};
           if(!state.adjustments) state.adjustments = {};
           if(!state.records) state.records = {};
           if(!state.attendanceDates) state.attendanceDates = [];
           if(!state.attendanceRecords) state.attendanceRecords = {};
-
-          state.records = urlData.records || state.records;
-          state.attendanceRecords = urlData.attendanceRecords || state.attendanceRecords;
           
+          // 深度合併 (Deep Merge) records - 避免覆蓋老師端其他作業的資料
+          if (urlData.records) {
+            for (let aId in urlData.records) {
+              if (!state.records[aId]) state.records[aId] = {};
+              for (let eId in urlData.records[aId]) {
+                state.records[aId][eId] = urlData.records[aId][eId];
+              }
+            }
+          }
+
+          // 深度合併 (Deep Merge) attendanceRecords
+          if (urlData.attendanceRecords) {
+            for (let dId in urlData.attendanceRecords) {
+              if (!state.attendanceRecords[dId]) state.attendanceRecords[dId] = {};
+              for (let sId in urlData.attendanceRecords[dId]) {
+                state.attendanceRecords[dId][sId] = urlData.attendanceRecords[dId][sId];
+              }
+            }
+          }
+          
+          // 安全合併 attendanceDates
           if (urlData.attendanceDates) {
             urlData.attendanceDates.forEach(ud => {
               if (!state.attendanceDates.find(sd => sd.id === ud.id)) {
@@ -786,10 +816,15 @@ function load() {
         if(!parsed.attendanceDates) parsed.attendanceDates = [];
         if(!parsed.attendanceRecords) parsed.attendanceRecords = {};
         if(!parsed.assignments) parsed.assignments = [];
-        // 防呆設定：確保舊資料能無痛升級
         if(!parsed.scores) parsed.scores = {};
         if(!parsed.adjustments) parsed.adjustments = {};
         if(!parsed.records) parsed.records = {};
+        
+        // 資料遷移防呆：如果舊資料沒有指定 scoreMode，自動為其賦值，修復「只剩個人模式」的問題
+        parsed.assignments.forEach(a => {
+          if (!a.scoreMode) a.scoreMode = (a.mode === 'group') ? 'group' : 'individual';
+        });
+
         state = parsed;
       } catch(e){} 
     }
@@ -910,6 +945,7 @@ function addGroup() {
   const name = document.getElementById('newGroupName').value.trim();
   const label = document.getElementById('newGroupLabel').value.trim();
   if (!name) { alert('請填入組別名稱'); return; }
+  const GROUP_COLORS = ['#ff5c5c', '#4a4a60', '#ffd166', '#06d6a0', '#118ab2', '#8b83ff'];
   const color = GROUP_COLORS[state.groups.length % GROUP_COLORS.length];
   state.groups.push({ id: uid(), name, label: label || name, color });
   save();
@@ -1551,7 +1587,7 @@ function renderDisplay() {
 }
 
 // ══════════════════════════════════════════════════════════
-//  LINKS (Student, TA, Sync)
+//  LINKS & SHORT URL (Student, TA, Sync)
 // ══════════════════════════════════════════════════════════
 function copyStudentLink() {
   const b64Data = compressData(state);
@@ -1581,7 +1617,45 @@ function generateSyncLink() {
   };
   const b64Data = compressData(exportData);
   const link = `${window.location.href.split('?')[0].split('#')[0]}?mode=sync#data=${b64Data}`;
-  navigator.clipboard.writeText(link).then(() => alert('✅ 已成功複製「同步連結」！\n請將連結傳給老師進行同步。')).catch(() => prompt('請複製連結：', link));
+  
+  // 開啟有短網址功能的 Modal
+  document.getElementById('syncLongUrl').value = link;
+  document.getElementById('syncShortUrl').style.display = 'none';
+  document.getElementById('syncShortUrl').value = '';
+  const btn = document.getElementById('btnShorten');
+  btn.style.display = 'inline-flex';
+  btn.textContent = '✨ 產生 is.gd 短網址';
+  btn.disabled = false;
+  openModal('syncModal');
+}
+
+// 透過 JSONP 解決 is.gd API CORS 的問題，在網頁內直接縮網址
+function createShortUrl() {
+  const longUrl = document.getElementById('syncLongUrl').value;
+  const btn = document.getElementById('btnShorten');
+  btn.textContent = '產生中...';
+  btn.disabled = true;
+
+  const cbName = 'isgd_cb_' + Date.now();
+  window[cbName] = function(data) {
+    if (data.shorturl) {
+      const shortInp = document.getElementById('syncShortUrl');
+      shortInp.style.display = 'block';
+      shortInp.value = data.shorturl;
+      shortInp.select();
+      document.execCommand('copy');
+      btn.textContent = '✅ 已複製短網址 (請直接貼上給老師)';
+    } else {
+      alert('短網址產生失敗：' + (data.errormessage || '請確認網路狀態'));
+      btn.textContent = '產生失敗，請複製上方長網址';
+    }
+    btn.disabled = false;
+    delete window[cbName];
+  };
+
+  const script = document.createElement('script');
+  script.src = `https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}&callback=${cbName}`;
+  document.body.appendChild(script);
 }
 
 // ══════════════════════════════════════════════════════════
