@@ -392,15 +392,52 @@
   /* Hide TA items in normal mode */
   .ta-only { display: none; }
 
+  /* ─── MOBILE UI ─── */
+  .mobile-menu-btn {
+    display: none;
+    position: fixed;
+    top: 16px; right: 16px;
+    width: 42px; height: 42px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 22px; cursor: pointer; z-index: 1001;
+    box-shadow: var(--shadow);
+  }
+  .mobile-fab-sync { display: none !important; }
+
   @media (max-width: 768px) {
-    .sidebar { transform: translateX(-220px); }
-    .main { margin-left: 0; padding: 16px; }
+    .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
+    .sidebar { transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 4px 0 24px rgba(0,0,0,0.5); }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; padding: 16px; padding-top: 64px; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    
+    /* 小老師手機版專屬浮動按鈕 */
+    body.ta-mode .mobile-fab-sync {
+      display: flex !important;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      color: var(--accent2);
+      padding: 14px 20px;
+      border-radius: 30px;
+      font-family: 'Noto Sans TC', sans-serif;
+      font-size: 14.5px;
+      font-weight: 700;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      z-index: 1000;
+      cursor: pointer;
+      align-items: center;
+      gap: 8px;
+    }
   }
 </style>
 </head>
 <body>
 <div class="app">
+  <button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div class="title">Six Thinking Hats</div>
@@ -591,6 +628,8 @@
       <div id="statsContent"></div>
     </div>
 
+    <button class="mobile-fab-sync" onclick="generateSyncLink()">📤 產生回傳同步連結</button>
+
   </main>
 </div>
 
@@ -703,8 +742,6 @@ let state = {
   attendanceRecords: {} // {dateId: {studentId: 'present'|'absent'|'late'}}
 };
 
-const GROUP_COLORS = ['#6c63ff','#ff5c5c','#06d6a0','#ffd166','#118ab2','#ff9f1c','#e63946','#2ec4b6','#a8dadc','#c77dff'];
-
 function save() { localStorage.setItem('sixhats_v4', JSON.stringify(state)); }
 
 function load() {
@@ -793,6 +830,11 @@ function navigate(el) {
   if (page === 'stats') renderStats();
   if (page === 'setup-students') renderStudentTable();
   if (page === 'setup-groups') renderGroupCards();
+  
+  // 在手機版點擊選單後自動關閉側邊欄
+  if (window.innerWidth <= 768) {
+    document.querySelector('.sidebar').classList.remove('open');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
