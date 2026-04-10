@@ -669,8 +669,29 @@ if (isTaMode) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  DATA STORE
+//  DATA STORE & COMPRESSION
 // ══════════════════════════════════════════════════════════
+// 使用壓縮技術處理網址，避免資料多時網址超長被截斷
+function compressData(data) {
+  try {
+    return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data)))));
+  } catch(e) {
+    return btoa(encodeURIComponent(JSON.stringify(data))); // 備用方案
+  }
+}
+
+function decompressData(str) {
+  try {
+    return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(str)))));
+  } catch(e) {
+    try {
+      return JSON.parse(decodeURIComponent(atob(str))); // 兼容舊版資料
+    } catch(e2) {
+      return JSON.parse(decodeURIComponent(atob(decodeURIComponent(str))));
+    }
+  }
+}
+
 let state = {
   students: [],    // {id, name, seatNo, groupId}
   groups: [],      // {id, name, label, color}
@@ -693,7 +714,7 @@ function load() {
     try {
       const hashData = window.location.hash.match(/data=([^&]*)/);
       if (hashData && hashData[1]) {
-        const urlData = JSON.parse(decodeURIComponent(atob(hashData[1])));
+        const urlData = decompressData(hashData[1]);
         
         if (appMode === 'sync') {
           // 老師接收小老師的回傳資料：僅更新紀錄，不蓋掉原本人員設定
@@ -701,6 +722,16 @@ function load() {
           if (localData) state = JSON.parse(localData);
           state.records = urlData.records || state.records;
           state.attendanceRecords = urlData.attendanceRecords || state.attendanceRecords;
+          
+          // 同步小老師新增的出缺席日期
+          if (urlData.attendanceDates) {
+            urlData.attendanceDates.forEach(ud => {
+              if (!state.attendanceDates.find(sd => sd.id === ud.id)) {
+                state.attendanceDates.push(ud);
+              }
+            });
+          }
+          
           save();
           alert('✅ 小老師的登記資料已成功同步到系統！');
           window.location.href = window.location.href.split('?')[0]; // 移除參數重新整理
@@ -709,6 +740,12 @@ function load() {
           // 學生或 TA 直接套用 url 的資料
           state = urlData;
           loadedFromUrl = true;
+          
+          // 若是小老師，自動將資料存入本地並移除網址上的 hash，避免重新整理後資料遺失
+          if (isTaMode) {
+             window.history.replaceState(null, '', window.location.pathname + '?mode=ta');
+             save();
+          }
         }
       }
     } catch(e) { console.error('Data load error', e); }
@@ -719,9 +756,10 @@ function load() {
     if (d) { 
       try { 
         let parsed = JSON.parse(d);
-        // 防呆，如果舊資料沒有出缺席結構
+        // 防呆確保結構完整
         if(!parsed.attendanceDates) parsed.attendanceDates = [];
         if(!parsed.attendanceRecords) parsed.attendanceRecords = {};
+        if(!parsed.assignments) parsed.assignments = [];
         state = parsed;
       } catch(e){} 
     }
@@ -1460,22 +1498,35 @@ function renderDisplay() {
 //  LINKS (Student, TA, Sync)
 // ══════════════════════════════════════════════════════════
 function copyStudentLink() {
-  const b64Data = btoa(encodeURIComponent(JSON.stringify(state)));
+  const b64Data = compressData(state);
   const link = `${window.location.href.split('?')[0].split('#')[0]}?mode=student#data=${b64Data}`;
   if (link.length > 3000) alert('注意：資料量較大，連結較長，建議使用短網址服務縮短後傳給學生。');
   navigator.clipboard.writeText(link).then(() => alert('✅ 已成功複製「學生專屬展示連結」！')).catch(() => prompt('請手動複製以下連結並傳給學生：', link));
 }
 
 function copyTaLink() {
-  const b64Data = btoa(encodeURIComponent(JSON.stringify(state)));
+  // 只擷取必要資訊，避免網址超長被截斷
+  const taState = {
+    students: state.students,
+    groups: state.groups,
+    assignments: state.assignments.map(a => ({ id: a.id, name: a.name, mode: a.mode, maxScore: a.maxScore })), 
+    records: state.records,
+    attendanceDates: state.attendanceDates,
+    attendanceRecords: state.attendanceRecords
+  };
+  const b64Data = compressData(taState);
   const link = `${window.location.href.split('?')[0].split('#')[0]}?mode=ta#data=${b64Data}`;
   navigator.clipboard.writeText(link).then(() => alert('✅ 已成功複製「小老師專屬連結」！\n小老師只能看見繳交紀錄與出缺席，並可產生回傳連結給您。')).catch(() => prompt('請手動複製以下小老師連結：', link));
 }
 
 function generateSyncLink() {
-  // TA 只會回傳 records 和 attendanceRecords
-  const exportData = { records: state.records, attendanceRecords: state.attendanceRecords };
-  const b64Data = btoa(encodeURIComponent(JSON.stringify(exportData)));
+  // TA 只會回傳 records 和 attendanceRecords，以及新增的出缺席日期
+  const exportData = { 
+    records: state.records, 
+    attendanceRecords: state.attendanceRecords,
+    attendanceDates: state.attendanceDates
+  };
+  const b64Data = compressData(exportData);
   const link = `${window.location.href.split('?')[0].split('#')[0]}?mode=sync#data=${b64Data}`;
   navigator.clipboard.writeText(link).then(() => alert('✅ 已成功複製「同步連結」！\n請將這個連結傳給老師，老師打開後即可自動同步您的登記紀錄。')).catch(() => prompt('請複製以下連結並傳給老師：', link));
 }
